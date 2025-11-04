@@ -9,7 +9,7 @@ import {
   getLessonsByUnitId,
   getUnitsByCourseId
 } from './curriculum-data';
-import { Resource } from './types';
+import { Artifact, Resource } from './types';
 
 // Tool definitions for Claude
 export const tools = [
@@ -201,6 +201,39 @@ export async function executeTool(toolName: string, args: any): Promise<any> {
   }
 }
 
+const resourceTypeToArtifactType: Record<Resource['type'], Artifact['type']> = {
+  teacher_guide: 'lesson_plan',
+  student_handout: 'handout',
+  assessment: 'assessment',
+  slides: 'document'
+};
+
+function buildGoogleDocEmbedUrl(url?: string) {
+  if (!url) return undefined;
+
+  if (url.includes('docs.google.com/document')) {
+    if (url.includes('/preview')) return url;
+    if (url.includes('/edit')) {
+      return url.replace(/\/edit[^#?]*/, '/preview');
+    }
+    if (url.includes('/view')) {
+      return url.replace(/\/view[^#?]*/, '/preview');
+    }
+  }
+
+  if (url.includes('docs.google.com/presentation')) {
+    if (url.includes('/preview')) return url;
+    return url.replace(/\/edit[^#?]*/, '/embed');
+  }
+
+  if (url.includes('drive.google.com')) {
+    if (url.includes('/preview')) return url;
+    return url.replace(/\/view[^#?]*/, '/preview');
+  }
+
+  return url;
+}
+
 function listFiles(args: any) {
   let filtered = [...resources];
 
@@ -318,6 +351,27 @@ function openFile(args: any) {
     }
   }
 
+  const googleDocUrl = resource.metadata?.googleDocUrl as string | undefined;
+  const externalUrl = googleDocUrl || (resource.metadata?.externalUrl as string | undefined) || resource.path;
+  const embedUrl = resource.metadata?.googleDocEmbedUrl as string | undefined || buildGoogleDocEmbedUrl(googleDocUrl || (resource.metadata?.externalUrl as string | undefined));
+
+  const artifact: Artifact = {
+    id: `resource-${resource.id}`,
+    type: resourceTypeToArtifactType[resource.type] ?? 'document',
+    title: resource.title,
+    content: '',
+    externalUrl,
+    embedUrl,
+    metadata: {
+      course: course?.name,
+      unit: unit?.title,
+      lesson: lesson?.title,
+      sourceFileId: resource.id,
+      sourceFileType: resource.type,
+      ...(resource.metadata || {})
+    }
+  };
+
   return {
     id: resource.id,
     title: resource.title,
@@ -327,7 +381,8 @@ function openFile(args: any) {
     unit: unit?.title,
     lesson: lesson?.title,
     headings: resource.headings,
-    content: content
+    content,
+    artifact
   };
 }
 
