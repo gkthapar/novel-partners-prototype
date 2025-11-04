@@ -97,6 +97,26 @@ export async function POST(req: NextRequest) {
                 title: input.title || artifacts[idx].title
               };
             }
+          } else if (toolResult && typeof toolResult === 'object') {
+            const addArtifact = (artifact: any) => {
+              if (!artifact) return;
+              const existingIdx = artifacts.findIndex(a => a.id === artifact.id);
+              if (existingIdx !== -1) {
+                artifacts[existingIdx] = { ...artifacts[existingIdx], ...artifact };
+              } else {
+                artifacts.push(artifact);
+              }
+            };
+
+            if (toolResult.artifact) {
+              addArtifact(toolResult.artifact);
+            }
+
+            if (Array.isArray(toolResult.artifacts)) {
+              for (const artifact of toolResult.artifacts) {
+                addArtifact(artifact);
+              }
+            }
           }
 
           // Add tool result to conversation
@@ -124,7 +144,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       response: currentResponse,
       toolCalls,
+      artifact: artifacts.length > 0 ? artifacts[artifacts.length - 1] : null,
       artifacts: artifacts.length > 0 ? artifacts[artifacts.length - 1] : null,
+      artifactList: artifacts,
       usage: {
         input_tokens: 0,
         output_tokens: 0

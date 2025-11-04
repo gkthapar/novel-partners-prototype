@@ -67,11 +67,16 @@ export interface Artifact {
   type: 'document' | 'lesson_plan' | 'assessment' | 'handout';
   title: string;
   content: string;
+  externalUrl?: string;
+  embedUrl?: string;
   metadata?: {
     course?: string;
     unit?: string;
     lesson?: string;
     adaptedFor?: string;
     standards?: string[];
+    sourceFileId?: string;
+    sourceFileType?: string;
+    [key: string]: any;
   };
 }
