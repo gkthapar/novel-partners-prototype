@@ -42,8 +42,20 @@ export function ChatInterface() {
     setInput('');
     setIsLoading(true);
 
+    // Create a temporary assistant message for streaming
+    const assistantMessageId = `msg-${Date.now()}-assistant`;
+    const assistantMessage: Message = {
+      id: assistantMessageId,
+      role: 'assistant',
+      content: '',
+      toolCalls: [],
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, assistantMessage]);
+
     try {
-      const response = await fetch('/api/chat', {
+      const response = await fetch('/api/chat-stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -55,25 +67,73 @@ export function ChatInterface() {
         })
       });
 
-      const data = await response.json();
-
-      if (data.error) {
-        throw new Error(data.error);
+      if (!response.ok || !response.body) {
+        throw new Error('Failed to get response');
       }
 
-      const assistantMessage: Message = {
-        id: `msg-${Date.now()}-assistant`,
-        role: 'assistant',
-        content: data.response,
-        toolCalls: data.toolCalls,
-        timestamp: new Date()
-      };
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
 
-      setMessages(prev => [...prev, assistantMessage]);
+      let buffer = '';
+      let currentContent = '';
+      let currentToolCalls: any[] = [];
 
-      // Update artifact if one was created/updated
-      if (data.artifacts) {
-        setCurrentArtifact(data.artifacts);
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              if (data.type === 'text') {
+                currentContent += data.content;
+                // Update the message with new content
+                setMessages(prev => prev.map(m =>
+                  m.id === assistantMessageId
+                    ? { ...m, content: currentContent }
+                    : m
+                ));
+              } else if (data.type === 'tool_use') {
+                currentToolCalls.push({
+                  id: Date.now().toString(),
+                  name: data.toolName,
+                  arguments: {},
+                  result: null
+                });
+                setMessages(prev => prev.map(m =>
+                  m.id === assistantMessageId
+                    ? { ...m, toolCalls: currentToolCalls }
+                    : m
+                ));
+              } else if (data.type === 'artifact') {
+                setCurrentArtifact(data.artifact);
+              } else if (data.type === 'done') {
+                // Final update with tool calls
+                if (data.toolCalls && data.toolCalls.length > 0) {
+                  setMessages(prev => prev.map(m =>
+                    m.id === assistantMessageId
+                      ? { ...m, toolCalls: data.toolCalls }
+                      : m
+                  ));
+                }
+                if (data.artifacts) {
+                  setCurrentArtifact(data.artifacts);
+                }
+              } else if (data.type === 'error') {
+                throw new Error(data.error);
+              }
+            } catch (parseError) {
+              console.error('Error parsing SSE data:', parseError);
+            }
+          }
+        }
       }
 
     } catch (error: any) {
@@ -116,7 +176,7 @@ export function ChatInterface() {
   return (
     <div className="flex h-screen bg-background">
       {/* Chat Panel */}
-      <div className="flex-1 flex flex-col border-r">
+      <div className="flex-1 flex flex-col border-r" style={{ width: currentArtifact ? '50%' : '100%', minWidth: '400px' }}>
         {/* Header with Context Selectors */}
         <div className="border-b p-4 bg-muted/30">
           <div className="flex items-center gap-2 mb-3">
@@ -167,110 +227,116 @@ export function ChatInterface() {
         </div>
 
         {/* Messages */}
-        <ScrollArea className="flex-1 p-4">
-          {messages.length === 0 && (
-            <div className="h-full flex flex-col items-center justify-center text-center p-8">
-              <BookOpen className="w-16 h-16 text-muted-foreground mb-4" />
-              <h2 className="text-2xl font-semibold mb-2">Welcome to Novel Partners Assistant</h2>
-              <p className="text-muted-foreground mb-6 max-w-md">
-                Ask me anything about your Novel Partners curriculum, or try one of these prompts:
-              </p>
-              <div className="space-y-2 max-w-2xl">
-                {quickPrompts.map((prompt, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setInput(prompt)}
-                    className="block w-full text-left p-3 rounded-lg border bg-card hover:bg-accent transition-colors text-sm"
-                  >
-                    {prompt}
-                  </button>
-                ))}
+        <ScrollArea className="flex-1">
+          <div className="max-w-3xl mx-auto px-4 py-6">
+            {messages.length === 0 && (
+              <div className="h-full flex flex-col items-center justify-center text-center py-12">
+                <BookOpen className="w-16 h-16 text-muted-foreground mb-4" />
+                <h2 className="text-2xl font-semibold mb-2">Welcome to Novel Partners Assistant</h2>
+                <p className="text-muted-foreground mb-6 max-w-md">
+                  Ask me anything about your Novel Partners curriculum, or try one of these prompts:
+                </p>
+                <div className="space-y-2 w-full max-w-2xl">
+                  {quickPrompts.map((prompt, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setInput(prompt)}
+                      className="block w-full text-left p-3 rounded-lg border bg-card hover:bg-accent transition-colors text-sm"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {messages.map(message => (
-            <div
-              key={message.id}
-              className={`mb-6 ${message.role === 'user' ? 'ml-12' : 'mr-12'}`}
-            >
-              <div className={`flex items-start gap-3 ${message.role === 'user' ? 'justify-end' : ''}`}>
-                {message.role === 'assistant' && (
-                  <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-semibold text-sm">
+            {messages.map(message => (
+              <div
+                key={message.id}
+                className="mb-4"
+              >
+                <div className={`flex items-start gap-3 ${message.role === 'user' ? 'justify-end' : ''}`}>
+                  {message.role === 'assistant' && (
+                    <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-semibold text-sm flex-shrink-0">
+                      NP
+                    </div>
+                  )}
+                  <div className={`max-w-[85%] ${message.role === 'user' ? 'flex justify-end' : ''}`}>
+                    <div
+                      className={`rounded-lg p-4 ${
+                        message.role === 'user'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted'
+                      }`}
+                    >
+                      <div className="prose prose-sm max-w-none dark:prose-invert">
+                        <ReactMarkdown>{message.content}</ReactMarkdown>
+                      </div>
+
+                      {message.toolCalls && message.toolCalls.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-border/50 text-xs space-y-1">
+                          {message.toolCalls.map((tc, idx) => (
+                            <div key={idx} className="text-muted-foreground">
+                              🔧 Used tool: <span className="font-mono">{tc.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {message.role === 'user' && (
+                    <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-secondary-foreground font-semibold text-sm flex-shrink-0">
+                      You
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {isLoading && (
+              <div className="mb-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-semibold text-sm flex-shrink-0">
                     NP
                   </div>
-                )}
-                <div className={`flex-1 ${message.role === 'user' ? 'flex justify-end' : ''}`}>
-                  <div
-                    className={`rounded-lg p-4 ${
-                      message.role === 'user'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted'
-                    }`}
-                  >
-                    <div className="prose prose-sm max-w-none dark:prose-invert">
-                      <ReactMarkdown>{message.content}</ReactMarkdown>
+                  <div className="max-w-[85%]">
+                    <div className="rounded-lg p-4 bg-muted">
+                      <Loader2 className="w-4 h-4 animate-spin" />
                     </div>
-
-                    {message.toolCalls && message.toolCalls.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-border/50 text-xs space-y-1">
-                        {message.toolCalls.map((tc, idx) => (
-                          <div key={idx} className="text-muted-foreground">
-                            🔧 Used tool: <span className="font-mono">{tc.name}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
-                {message.role === 'user' && (
-                  <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-secondary-foreground font-semibold text-sm">
-                    You
-                  </div>
-                )}
               </div>
-            </div>
-          ))}
+            )}
 
-          {isLoading && (
-            <div className="flex items-start gap-3 mb-6 mr-12">
-              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-semibold text-sm">
-                NP
-              </div>
-              <div className="flex-1">
-                <div className="rounded-lg p-4 bg-muted">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div ref={messagesEndRef} />
+            <div ref={messagesEndRef} />
+          </div>
         </ScrollArea>
 
         {/* Input */}
         <div className="border-t p-4">
-          <div className="flex gap-2">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyPress}
-              placeholder="Ask about the curriculum, create materials, or adapt content..."
-              className="flex-1 resize-none rounded-lg border bg-background px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring min-h-[60px] max-h-[200px]"
-              rows={2}
-            />
-            <Button
-              onClick={handleSend}
-              disabled={!input.trim() || isLoading}
-              size="icon"
-              className="h-[60px] w-[60px]"
-            >
-              <Send className="w-5 h-5" />
-            </Button>
+          <div className="max-w-3xl mx-auto">
+            <div className="flex gap-2">
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyPress}
+                placeholder="Ask about the curriculum, create materials, or adapt content..."
+                className="flex-1 resize-none rounded-lg border bg-background px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring min-h-[60px] max-h-[200px]"
+                rows={2}
+              />
+              <Button
+                onClick={handleSend}
+                disabled={!input.trim() || isLoading}
+                size="icon"
+                className="h-[60px] w-[60px] flex-shrink-0"
+              >
+                <Send className="w-5 h-5" />
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Press Enter to send, Shift+Enter for new line
+            </p>
           </div>
-          <p className="text-xs text-muted-foreground mt-2">
-            Press Enter to send, Shift+Enter for new line
-          </p>
         </div>
       </div>
 
