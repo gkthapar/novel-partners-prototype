@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
             result: toolResult
           });
 
-          // If tool creates/updates document, add to artifacts
+          // If tool creates/updates document or opens file, add to artifacts
           if (content.name === 'create_document') {
             const input = content.input as any;
             artifacts.push({
@@ -104,6 +104,9 @@ export async function POST(req: NextRequest) {
                 title: input.title || artifacts[idx].title
               };
             }
+          } else if (content.name === 'open_file' && toolResult.artifact) {
+            // open_file now returns an artifact object
+            artifacts.push(toolResult.artifact);
           }
 
           // Add tool result to conversation

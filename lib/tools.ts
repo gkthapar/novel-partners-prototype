@@ -61,17 +61,13 @@ export const tools = [
   },
   {
     name: 'open_file',
-    description: 'Open and read a curriculum file. Returns the full content with headings.',
+    description: 'Open a curriculum file in a tab on the right side. If the file has a Google Doc URL, it will display the actual Google Doc with perfect formatting. If not, it shows the content. This is the MAIN tool for opening curriculum files that teachers want to see.',
     input_schema: {
       type: 'object',
       properties: {
         fileId: {
           type: 'string',
           description: 'The ID of the file to open'
-        },
-        section: {
-          type: 'string',
-          description: 'Optional: Specific section heading to focus on'
         }
       },
       required: ['fileId']
@@ -312,39 +308,28 @@ function openFile(args: any) {
   const unit = lesson ? units.find(u => u.id === lesson.unitId) : null;
   const course = unit ? courses.find(c => c.id === unit.courseId) : null;
 
-  let content = resource.content;
-
-  // If specific section requested, extract it
-  if (args.section) {
-    const lines = content.split('\n');
-    const sectionStart = lines.findIndex(line =>
-      line.toLowerCase().includes(args.section.toLowerCase()) ||
-      line.trim().toLowerCase() === args.section.toLowerCase()
-    );
-
-    if (sectionStart !== -1) {
-      // Find next heading or end of content
-      let sectionEnd = lines.length;
-      for (let i = sectionStart + 1; i < lines.length; i++) {
-        if (lines[i].startsWith('#') && !lines[i].startsWith('###')) {
-          sectionEnd = i;
-          break;
-        }
-      }
-      content = lines.slice(sectionStart, sectionEnd).join('\n');
+  // Return an artifact object that can be displayed in a tab
+  const artifact = {
+    id: `artifact-${resource.id}`,
+    type: resource.googleDocUrl ? 'google_doc' as const : resource.type,
+    title: resource.title,
+    content: resource.content,
+    googleDocUrl: resource.googleDocUrl,
+    isEditable: !resource.googleDocUrl, // Google Docs can't be edited in-app
+    metadata: {
+      course: course?.name,
+      unit: unit?.title,
+      lesson: lesson?.title,
+      fileType: resource.type
     }
-  }
+  };
 
   return {
-    id: resource.id,
-    title: resource.title,
-    type: resource.type,
-    path: resource.path,
-    course: course?.name,
-    unit: unit?.title,
-    lesson: lesson?.title,
-    headings: resource.headings,
-    content: content
+    success: true,
+    artifact,
+    message: resource.googleDocUrl
+      ? `Opened ${resource.title} - this will display the actual Google Doc with perfect formatting in a new tab`
+      : `Opened ${resource.title} in a new tab`
   };
 }
 

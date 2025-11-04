@@ -8,13 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Message, Artifact } from '@/lib/types';
 import { courses, units, lessons } from '@/lib/curriculum-data';
 import ReactMarkdown from 'react-markdown';
-import { ArtifactPanel } from './artifact-panel';
+import { TabbedArtifactPanel } from './tabbed-artifact-panel';
 
 export function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [currentArtifact, setCurrentArtifact] = useState<Artifact | null>(null);
+  const [openArtifacts, setOpenArtifacts] = useState<Artifact[]>([]);
+  const [activeArtifactId, setActiveArtifactId] = useState<string>('');
   const [selectedCourse, setSelectedCourse] = useState<string>('');
   const [selectedUnit, setSelectedUnit] = useState<string>('');
   const [selectedLesson, setSelectedLesson] = useState<string>('');
@@ -63,7 +64,8 @@ export function ChatInterface() {
             role: m.role,
             content: m.content
           })),
-          currentArtifact
+          openArtifacts,
+          activeArtifactId
         })
       });
 
@@ -113,7 +115,15 @@ export function ChatInterface() {
                     : m
                 ));
               } else if (data.type === 'artifact') {
-                setCurrentArtifact(data.artifact);
+                // Add or update artifact
+                setOpenArtifacts(prev => {
+                  const existing = prev.find(a => a.id === data.artifact.id);
+                  if (existing) {
+                    return prev.map(a => a.id === data.artifact.id ? data.artifact : a);
+                  }
+                  return [...prev, data.artifact];
+                });
+                setActiveArtifactId(data.artifact.id);
               } else if (data.type === 'done') {
                 // Final update with tool calls
                 if (data.toolCalls && data.toolCalls.length > 0) {
@@ -124,7 +134,15 @@ export function ChatInterface() {
                   ));
                 }
                 if (data.artifacts) {
-                  setCurrentArtifact(data.artifacts);
+                  // Add or update artifact
+                  setOpenArtifacts(prev => {
+                    const existing = prev.find(a => a.id === data.artifacts.id);
+                    if (existing) {
+                      return prev.map(a => a.id === data.artifacts.id ? data.artifacts : a);
+                    }
+                    return [...prev, data.artifacts];
+                  });
+                  setActiveArtifactId(data.artifacts.id);
                 }
               } else if (data.type === 'error') {
                 throw new Error(data.error);
@@ -269,8 +287,21 @@ export function ChatInterface() {
                           : 'bg-muted'
                       }`}
                     >
-                      <div className="prose prose-sm max-w-none dark:prose-invert">
-                        <ReactMarkdown>{message.content}</ReactMarkdown>
+                      <div className="prose prose-sm max-w-none dark:prose-invert
+                        prose-p:my-2 prose-p:leading-relaxed
+                        prose-headings:mt-4 prose-headings:mb-2
+                        prose-ul:my-2 prose-li:my-1
+                        prose-ol:my-2
+                        prose-pre:my-2
+                      ">
+                        <ReactMarkdown
+                          components={{
+                            p: ({node, ...props}) => <p className="my-2 leading-relaxed whitespace-pre-wrap" {...props} />,
+                            li: ({node, ...props}) => <li className="my-1" {...props} />,
+                          }}
+                        >
+                          {message.content}
+                        </ReactMarkdown>
                       </div>
 
                       {message.toolCalls && message.toolCalls.length > 0 && (
@@ -341,13 +372,22 @@ export function ChatInterface() {
       </div>
 
       {/* Artifact Panel */}
-      {currentArtifact && (
-        <ArtifactPanel
-          artifact={currentArtifact}
-          onUpdate={(content) => {
-            setCurrentArtifact({ ...currentArtifact, content });
+      {openArtifacts.length > 0 && (
+        <TabbedArtifactPanel
+          artifacts={openArtifacts}
+          activeArtifactId={activeArtifactId}
+          onSetActive={setActiveArtifactId}
+          onUpdate={(id, content) => {
+            setOpenArtifacts(prev => prev.map(a =>
+              a.id === id ? { ...a, content } : a
+            ));
           }}
-          onClose={() => setCurrentArtifact(null)}
+          onClose={(id) => {
+            setOpenArtifacts(prev => prev.filter(a => a.id !== id));
+            if (activeArtifactId === id && openArtifacts.length > 1) {
+              setActiveArtifactId(openArtifacts[0].id);
+            }
+          }}
         />
       )}
     </div>

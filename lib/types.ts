@@ -65,14 +65,17 @@ export interface ToolCall {
 
 export interface Artifact {
   id: string;
-  type: 'document' | 'lesson_plan' | 'assessment' | 'handout';
+  type: 'document' | 'lesson_plan' | 'assessment' | 'handout' | 'google_doc';
   title: string;
   content: string;
+  googleDocUrl?: string; // URL for embedding Google Docs
+  isEditable?: boolean; // Can this document be edited?
   metadata?: {
     course?: string;
     unit?: string;
     lesson?: string;
     adaptedFor?: string;
     standards?: string[];
+    fileType?: string;
   };
 }
