@@ -62,8 +62,9 @@ export const resources: Resource[] = [
     id: 'resource-1',
     lessonId: 'lesson-1',
     type: 'teacher_guide',
-    title: 'Lesson 1 Teacher Guide',
+    title: 'Foundations Lesson 1 - Lesson Plan',
     path: '/curriculum/grade-9/unit-1/lesson-1/teacher-guide.pdf',
+    googleDocUrl: 'https://docs.google.com/document/d/1Wgvll4xfWNNGJacsFHPdRzQjH-qDJIBiJTUcpN567Ow/edit?tab=t.0',
     headings: [
       'Learning Objectives',
       'Materials Needed',
@@ -169,8 +170,9 @@ Read pages 21-35 and add 3 more entries to your Character Analysis Chart focusin
     id: 'resource-2',
     lessonId: 'lesson-1',
     type: 'student_handout',
-    title: 'Character Analysis Chart',
+    title: 'Foundations Lesson 1 - Student Handout',
     path: '/curriculum/grade-9/unit-1/lesson-1/character-analysis-chart.pdf',
+    googleDocUrl: 'https://docs.google.com/document/d/1G-jU1TiVZ84ntHJHNYORR00EKfBxqVUQ/edit',
     headings: ['Character Name', 'Physical Description', 'Cultural Background', 'Goals', 'Conflicts'],
     content: `# Character Analysis Chart: Binti
 

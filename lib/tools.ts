@@ -10,6 +10,7 @@ import {
   getUnitsByCourseId
 } from './curriculum-data';
 import { Resource } from './types';
+import { fetchGoogleDoc, htmlToMarkdown } from './google-docs';
 
 // Tool definitions for Claude
 export const tools = [
@@ -144,6 +145,20 @@ export const tools = [
     }
   },
   {
+    name: 'fetch_google_doc',
+    description: 'Fetch the actual content from a Google Doc curriculum file. This loads the REAL content from Novel Partners Google Docs into the conversation for answering questions. Use this to get the actual curriculum content instead of the mock data.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        fileId: {
+          type: 'string',
+          description: 'The ID of the curriculum file that has a Google Doc link'
+        }
+      },
+      required: ['fileId']
+    }
+  },
+  {
     name: 'create_enlighten_assignment',
     description: 'Create an assignment in EnlightenAI (mocked for demo). Returns an assignment ID.',
     input_schema: {
@@ -190,6 +205,8 @@ export async function executeTool(toolName: string, args: any): Promise<any> {
       return openFile(args);
     case 'copy_section':
       return copySection(args);
+    case 'fetch_google_doc':
+      return fetchGoogleDocTool(args);
     case 'create_document':
       return createDocument(args);
     case 'update_document':
@@ -372,6 +389,56 @@ function copySection(args: any) {
     content: sectionContent,
     note: 'This is verbatim text from the curriculum file.'
   };
+}
+
+async function fetchGoogleDocTool(args: any) {
+  const resource = resources.find(r => r.id === args.fileId);
+
+  if (!resource) {
+    return { error: 'File not found', fileId: args.fileId };
+  }
+
+  if (!resource.googleDocUrl) {
+    return {
+      error: 'This file does not have a Google Doc link',
+      fileId: args.fileId,
+      note: 'Use open_file instead for files without Google Doc links'
+    };
+  }
+
+  try {
+    // Fetch the actual Google Doc content
+    const docData = await fetchGoogleDoc(resource.googleDocUrl);
+
+    // Convert HTML to clean markdown
+    const markdown = htmlToMarkdown(docData.html);
+
+    const lesson = lessons.find(l => l.id === resource.lessonId);
+    const unit = lesson ? units.find(u => u.id === lesson.unitId) : null;
+    const course = unit ? courses.find(c => c.id === unit.courseId) : null;
+
+    return {
+      fileId: resource.id,
+      title: docData.title,
+      type: resource.type,
+      course: course?.name,
+      unit: unit?.title,
+      lesson: lesson?.title,
+      googleDocUrl: docData.url,
+      content: markdown,
+      rawText: docData.content,
+      note: 'This is the REAL content from the Novel Partners Google Doc. Use this to answer questions accurately.',
+      fetchedAt: new Date().toISOString()
+    };
+  } catch (error: any) {
+    return {
+      error: 'Failed to fetch Google Doc',
+      message: error.message,
+      fileId: args.fileId,
+      googleDocUrl: resource.googleDocUrl,
+      note: 'Make sure the Google Doc is shared with "Anyone with the link can view"'
+    };
+  }
 }
 
 function createDocument(args: any) {

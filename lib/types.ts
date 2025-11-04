@@ -28,6 +28,7 @@ export interface Resource {
   path: string;
   content: string;
   headings: string[];
+  googleDocUrl?: string; // URL to Google Doc for live fetching
   metadata?: Record<string, any>;
 }
 
