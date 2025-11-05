@@ -9,6 +9,92 @@ import { Message, Artifact } from '@/lib/types';
 import { courses, units, lessons } from '@/lib/curriculum-data';
 import ReactMarkdown from 'react-markdown';
 import { ArtifactPanel } from './artifact-panel';
+import type { Components } from 'react-markdown';
+import { cn } from '@/lib/utils';
+
+const markdownComponents: Components = {
+  p: ({ node: _node, className, children, ...props }) => (
+    <p
+      {...props}
+      className={cn(
+        'whitespace-pre-line break-words text-[15px] leading-6 text-foreground/90 last:mb-0',
+        className
+      )}
+    >
+      {children}
+    </p>
+  ),
+  ul: ({ node: _node, className, children, ...props }) => (
+    <ul
+      {...props}
+      className={cn('ml-5 mt-3 list-disc space-y-2 text-[15px] leading-6 text-foreground/90', className)}
+    >
+      {children}
+    </ul>
+  ),
+  ol: ({ node: _node, className, children, ...props }) => (
+    <ol
+      {...props}
+      className={cn('ml-5 mt-3 list-decimal space-y-2 text-[15px] leading-6 text-foreground/90', className)}
+    >
+      {children}
+    </ol>
+  ),
+  li: ({ node: _node, className, children, ...props }) => (
+    <li {...props} className={cn('pl-1', className)}>
+      {children}
+    </li>
+  ),
+  blockquote: ({ node: _node, className, children, ...props }) => (
+    <blockquote
+      {...props}
+      className={cn(
+        'my-4 border-l-2 border-primary/60 pl-3 text-[15px] leading-6 text-foreground/80',
+        className
+      )}
+    >
+      {children}
+    </blockquote>
+  ),
+  pre: ({ node: _node, className, children, ...props }) => (
+    <pre
+      {...props}
+      className={cn(
+        'my-3 overflow-x-auto rounded-md bg-muted px-3 py-2 text-xs text-foreground shadow-sm',
+        className
+      )}
+    >
+      {children}
+    </pre>
+  ),
+  code: ({ node: _node, inline, className, children, ...props }) => {
+    if (inline) {
+      return (
+        <code
+          {...props}
+          className={cn(
+            'rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-foreground shadow-sm',
+            className
+          )}
+        >
+          {children}
+        </code>
+      );
+    }
+
+    return (
+      <code
+        {...props}
+        className={cn(
+          'block whitespace-pre-wrap rounded-md bg-muted px-3 py-2 text-xs text-foreground shadow-sm',
+          className
+        )}
+      >
+        {children}
+      </code>
+    );
+  }
+};
 
 export function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -185,110 +271,120 @@ export function ChatInterface() {
         </div>
 
         {/* Messages */}
-        <ScrollArea className="flex-1 p-4">
-          {messages.length === 0 && (
-            <div className="h-full flex flex-col items-center justify-center text-center p-8">
-              <BookOpen className="w-16 h-16 text-muted-foreground mb-4" />
-              <h2 className="text-2xl font-semibold mb-2">Welcome to Novel Partners Assistant</h2>
-              <p className="text-muted-foreground mb-6 max-w-md">
-                Ask me anything about your Novel Partners curriculum, or try one of these prompts:
-              </p>
-              <div className="space-y-2 max-w-2xl">
-                {quickPrompts.map((prompt, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setInput(prompt)}
-                    className="block w-full text-left p-3 rounded-lg border bg-card hover:bg-accent transition-colors text-sm"
-                  >
-                    {prompt}
-                  </button>
-                ))}
+        <ScrollArea className="flex-1">
+          <div className="mx-auto flex h-full w-full max-w-[720px] flex-col px-4 py-6">
+            {messages.length === 0 && (
+              <div className="flex flex-1 flex-col items-center justify-center text-center">
+                <BookOpen className="mb-4 h-16 w-16 text-muted-foreground" />
+                <h2 className="mb-2 text-2xl font-semibold">Welcome to Novel Partners Assistant</h2>
+                <p className="mb-6 max-w-md text-muted-foreground">
+                  Ask me anything about your Novel Partners curriculum, or try one of these prompts:
+                </p>
+                <div className="w-full space-y-2">
+                  {quickPrompts.map((prompt, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setInput(prompt)}
+                      className="block w-full rounded-lg border bg-card p-3 text-left text-sm transition-colors hover:bg-accent"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {messages.map(message => (
-            <div
-              key={message.id}
-              className={`mb-6 ${message.role === 'user' ? 'ml-12' : 'mr-12'}`}
-            >
-              <div className={`flex items-start gap-3 ${message.role === 'user' ? 'justify-end' : ''}`}>
-                {message.role === 'assistant' && (
-                  <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-semibold text-sm">
-                    NP
-                  </div>
-                )}
-                <div className={`flex-1 ${message.role === 'user' ? 'flex justify-end' : ''}`}>
+            {messages.map(message => {
+              const isUser = message.role === 'user';
+
+              return (
+                <div key={message.id} className="mb-6">
                   <div
-                    className={`rounded-lg p-4 ${
-                      message.role === 'user'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted'
-                    }`}
+                    className={cn(
+                      'flex items-start gap-3',
+                      isUser ? 'justify-end' : ''
+                    )}
                   >
-                    <div className="prose prose-sm max-w-none dark:prose-invert">
-                      <ReactMarkdown>{message.content}</ReactMarkdown>
+                  {!isUser && (
+                    <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-semibold text-sm">
+                      NP
                     </div>
+                  )}
+
+                  <div
+                    className={cn(
+                      'rounded-2xl px-4 py-3 shadow-sm transition-colors',
+                      'max-w-full sm:max-w-[520px] lg:max-w-[600px] text-[15px] leading-6',
+                      isUser
+                        ? 'bg-primary text-primary-foreground ml-auto'
+                        : 'bg-muted text-foreground'
+                    )}
+                  >
+                    <ReactMarkdown className="space-y-4" components={markdownComponents}>
+                      {message.content}
+                    </ReactMarkdown>
 
                     {message.toolCalls && message.toolCalls.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-border/50 text-xs space-y-1">
+                      <div className="mt-3 pt-3 border-t border-border/50 text-xs space-y-1 text-muted-foreground">
                         {message.toolCalls.map((tc, idx) => (
-                          <div key={idx} className="text-muted-foreground">
+                          <div key={idx}>
                             🔧 Used tool: <span className="font-mono">{tc.name}</span>
                           </div>
                         ))}
                       </div>
                     )}
                   </div>
-                </div>
-                {message.role === 'user' && (
-                  <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-secondary-foreground font-semibold text-sm">
-                    You
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
 
-          {isLoading && (
-            <div className="flex items-start gap-3 mb-6 mr-12">
-              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-semibold text-sm">
-                NP
+                  {isUser && (
+                    <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-secondary-foreground font-semibold text-sm">
+                      You
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="flex-1">
-                <div className="rounded-lg p-4 bg-muted">
+            );
+          })}
+
+            {isLoading && (
+              <div className="flex items-start gap-3 mb-6">
+                <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-semibold text-sm">
+                  NP
+                </div>
+                <div className="max-w-full rounded-2xl bg-muted px-4 py-3 text-foreground shadow-sm sm:max-w-[520px] lg:max-w-[600px]">
                   <Loader2 className="w-4 h-4 animate-spin" />
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <div ref={messagesEndRef} />
+            <div ref={messagesEndRef} />
+          </div>
         </ScrollArea>
 
         {/* Input */}
-        <div className="border-t p-4">
-          <div className="flex gap-2">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyPress}
-              placeholder="Ask about the curriculum, create materials, or adapt content..."
+        <div className="border-t">
+          <div className="mx-auto w-full max-w-[720px] px-4 py-4">
+            <div className="flex gap-2">
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyPress}
+                placeholder="Ask about the curriculum, create materials, or adapt content..."
               className="flex-1 resize-none rounded-lg border bg-background px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring min-h-[60px] max-h-[200px]"
               rows={2}
             />
-            <Button
-              onClick={handleSend}
-              disabled={!input.trim() || isLoading}
-              size="icon"
-              className="h-[60px] w-[60px]"
-            >
-              <Send className="w-5 h-5" />
-            </Button>
+              <Button
+                onClick={handleSend}
+                disabled={!input.trim() || isLoading}
+                size="icon"
+                className="h-[52px] w-[52px]"
+              >
+                <Send className="w-5 h-5" />
+              </Button>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Press Enter to send, Shift+Enter for new line
+            </p>
           </div>
-          <p className="text-xs text-muted-foreground mt-2">
-            Press Enter to send, Shift+Enter for new line
-          </p>
         </div>
       </div>
 
