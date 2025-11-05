@@ -19,6 +19,7 @@ export function ChatInterface() {
   const [selectedCourse, setSelectedCourse] = useState<string>('');
   const [selectedUnit, setSelectedUnit] = useState<string>('');
   const [selectedLesson, setSelectedLesson] = useState<string>('');
+  const [suggestedFollowUps, setSuggestedFollowUps] = useState<string[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollToBottom = () => {
@@ -29,26 +30,31 @@ export function ChatInterface() {
     scrollToBottom();
   }, [messages]);
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+  const handleSend = async (overrideInput?: string) => {
+    const messageContent = (overrideInput ?? input).trim();
+
+    if (!messageContent || isLoading) return;
 
     const userMessage: Message = {
       id: `msg-${Date.now()}`,
       role: 'user',
-      content: input,
+      content: messageContent,
       timestamp: new Date()
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    const updatedMessages = [...messages, userMessage];
+
+    setMessages(updatedMessages);
     setInput('');
     setIsLoading(true);
+    setSuggestedFollowUps([]);
 
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: [...messages, userMessage].map(m => ({
+          messages: updatedMessages.map(m => ({
             role: m.role,
             content: m.content
           })),
@@ -71,6 +77,11 @@ export function ChatInterface() {
       };
 
       setMessages(prev => [...prev, assistantMessage]);
+      setSuggestedFollowUps(
+        Array.isArray(data.followUpSuggestions)
+          ? data.followUpSuggestions.filter((item: unknown): item is string => typeof item === 'string')
+          : []
+      );
 
       // Update artifact if one was created/updated
       const artifactsFromResponse = (Array.isArray(data.artifactList) ? data.artifactList : []).filter(
@@ -289,6 +300,27 @@ export function ChatInterface() {
           <p className="text-xs text-muted-foreground mt-2">
             Press Enter to send, Shift+Enter for new line
           </p>
+          {suggestedFollowUps.length > 0 && (
+            <div className="mt-4">
+              <p className="text-xs font-medium uppercase text-muted-foreground tracking-wide mb-2">
+                Suggested follow-up questions
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {suggestedFollowUps.map((suggestion, idx) => (
+                  <Button
+                    key={`${suggestion}-${idx}`}
+                    variant="outline"
+                    size="sm"
+                    className="text-left whitespace-normal h-auto py-2"
+                    onClick={() => handleSend(suggestion)}
+                    disabled={isLoading}
+                  >
+                    {suggestion}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
