@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, type MouseEventHandler } from 'react';
 import { Send, BookOpen, Loader2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
@@ -122,8 +122,18 @@ export function ChatInterface() {
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      void handleSend();
     }
+  };
+
+  const handleSendButtonClick: MouseEventHandler<HTMLButtonElement> = () => {
+    void handleSend();
+  };
+
+  const handleSuggestionClick = (
+    suggestion: string
+  ): MouseEventHandler<HTMLButtonElement> => () => {
+    void handleSend(suggestion);
   };
 
   const availableUnits = selectedCourse
@@ -289,7 +299,7 @@ export function ChatInterface() {
               rows={2}
             />
             <Button
-              onClick={() => void handleSend()}
+              onClick={handleSendButtonClick}
               disabled={!input.trim() || isLoading}
               size="icon"
               className="h-[60px] w-[60px]"
@@ -312,7 +322,7 @@ export function ChatInterface() {
                     variant="outline"
                     size="sm"
                     className="text-left whitespace-normal h-auto py-2"
-                    onClick={() => void handleSend(suggestion)}
+                    onClick={handleSuggestionClick(suggestion)}
                     disabled={isLoading}
                   >
                     {suggestion}
