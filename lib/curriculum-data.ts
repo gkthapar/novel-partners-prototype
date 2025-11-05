@@ -74,6 +74,12 @@ export const resources: Resource[] = [
       'Independent Practice',
       'Closure and Assessment'
     ],
+    metadata: {
+      googleDocUrl:
+        'https://docs.google.com/document/d/1jwyO-khf_EvleHnE4uXG56LRSulMxDvKlLAYXMe73mM/edit?usp=sharing',
+      googleDocEmbedUrl:
+        'https://docs.google.com/document/d/1jwyO-khf_EvleHnE4uXG56LRSulMxDvKlLAYXMe73mM/preview'
+    },
     content: `# Lesson 1: Introduction to Binti and Cultural Identity
 
 ## Learning Objectives
@@ -172,6 +178,12 @@ Read pages 21-35 and add 3 more entries to your Character Analysis Chart focusin
     title: 'Character Analysis Chart',
     path: '/curriculum/grade-9/unit-1/lesson-1/character-analysis-chart.pdf',
     headings: ['Character Name', 'Physical Description', 'Cultural Background', 'Goals', 'Conflicts'],
+    metadata: {
+      googleDocUrl:
+        'https://docs.google.com/document/d/1R0UVv21vG9wH14r2raXIiQunlslqY5T2r8j04YfGLm4/edit?usp=sharing',
+      googleDocEmbedUrl:
+        'https://docs.google.com/document/d/1R0UVv21vG9wH14r2raXIiQunlslqY5T2r8j04YfGLm4/preview'
+    },
     content: `# Character Analysis Chart: Binti
 
 ## Character Name: _______________
@@ -221,6 +233,12 @@ End: _____________________________________________________`
     title: 'Lesson 2 Teacher Guide',
     path: '/curriculum/grade-9/unit-1/lesson-2/teacher-guide.pdf',
     headings: ['Learning Objectives', 'Materials', 'Lesson Activities', 'Assessment'],
+    metadata: {
+      googleDocUrl:
+        'https://docs.google.com/document/d/1l6iMhPZt7x1YgnPZXoqBYwrs9jwELyhl725LLJoS5gM/edit?usp=sharing',
+      googleDocEmbedUrl:
+        'https://docs.google.com/document/d/1l6iMhPZt7x1YgnPZXoqBYwrs9jwELyhl725LLJoS5gM/preview'
+    },
     content: `# Lesson 2: Character Analysis - Binti's Transformation
 
 ## Learning Objectives
@@ -270,6 +288,12 @@ Write a paragraph explaining one way Binti has changed from the beginning of the
     title: 'Performance Task: Literary Analysis Essay',
     path: '/curriculum/grade-9/unit-1/lesson-4/performance-task.pdf',
     headings: ['Task Overview', 'Prompt', 'Requirements', 'Rubric'],
+    metadata: {
+      googleDocUrl:
+        'https://docs.google.com/document/d/12VOsJh8h1k-VlHzkwmo7aX6ixSeKuuNHYsYAGdivEag/edit?usp=sharing',
+      googleDocEmbedUrl:
+        'https://docs.google.com/document/d/12VOsJh8h1k-VlHzkwmo7aX6ixSeKuuNHYsYAGdivEag/preview'
+    },
     content: `# Performance Task: Literary Analysis Essay
 
 ## Task Overview
