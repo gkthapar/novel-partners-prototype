@@ -14,7 +14,8 @@ export function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [currentArtifact, setCurrentArtifact] = useState<Artifact | null>(null);
+  const [artifactList, setArtifactList] = useState<Artifact[]>([]);
+  const [activeArtifactId, setActiveArtifactId] = useState<string | null>(null);
   const [selectedCourse, setSelectedCourse] = useState<string>('');
   const [selectedUnit, setSelectedUnit] = useState<string>('');
   const [selectedLesson, setSelectedLesson] = useState<string>('');
@@ -51,7 +52,7 @@ export function ChatInterface() {
             role: m.role,
             content: m.content
           })),
-          currentArtifact
+          currentArtifact: artifactList.find(a => a.id === activeArtifactId) ?? null
         })
       });
 
@@ -72,8 +73,25 @@ export function ChatInterface() {
       setMessages(prev => [...prev, assistantMessage]);
 
       // Update artifact if one was created/updated
-      if (data.artifacts) {
-        setCurrentArtifact(data.artifacts);
+      const artifactsFromResponse = (Array.isArray(data.artifactList) ? data.artifactList : []).filter(
+        (artifact: Artifact | null): artifact is Artifact => Boolean(artifact)
+      );
+
+      if (artifactsFromResponse.length > 0) {
+        setArtifactList(prev => {
+          const existingMap = new Map(prev.map(artifact => [artifact.id, artifact] as const));
+          for (const artifact of artifactsFromResponse) {
+            if (!artifact?.id) continue;
+            const previous = existingMap.get(artifact.id);
+            existingMap.set(artifact.id, previous ? { ...previous, ...artifact } : artifact);
+          }
+          return Array.from(existingMap.values());
+        });
+
+        const latestArtifact = artifactsFromResponse[artifactsFromResponse.length - 1];
+        if (latestArtifact?.id) {
+          setActiveArtifactId(latestArtifact.id);
+        }
       }
 
     } catch (error: any) {
@@ -275,13 +293,22 @@ export function ChatInterface() {
       </div>
 
       {/* Artifact Panel */}
-      {currentArtifact && (
+      {artifactList.length > 0 && (
         <ArtifactPanel
-          artifact={currentArtifact}
-          onUpdate={(content) => {
-            setCurrentArtifact({ ...currentArtifact, content });
+          artifacts={artifactList}
+          activeArtifactId={activeArtifactId}
+          onSelectArtifact={setActiveArtifactId}
+          onUpdateArtifact={(artifactId, content) => {
+            setArtifactList(prev =>
+              prev.map(artifact =>
+                artifact.id === artifactId ? { ...artifact, content } : artifact
+              )
+            );
           }}
-          onClose={() => setCurrentArtifact(null)}
+          onClosePanel={() => {
+            setArtifactList([]);
+            setActiveArtifactId(null);
+          }}
         />
       )}
     </div>
