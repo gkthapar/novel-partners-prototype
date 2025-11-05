@@ -76,9 +76,9 @@ export const resources: Resource[] = [
     ],
     metadata: {
       googleDocUrl:
-        'https://docs.google.com/document/d/1jwyO-khf_EvleHnE4uXG56LRSulMxDvKlLAYXMe73mM/edit?usp=sharing',
+        'https://docs.google.com/document/d/1vg7S6ZvWJhH_8fvzjg9_Knn_QEyOr-mFKwP7n9XHLOE/edit?usp=sharing',
       googleDocEmbedUrl:
-        'https://docs.google.com/document/d/1jwyO-khf_EvleHnE4uXG56LRSulMxDvKlLAYXMe73mM/preview'
+        'https://docs.google.com/document/d/1vg7S6ZvWJhH_8fvzjg9_Knn_QEyOr-mFKwP7n9XHLOE/preview'
     },
     content: `# Lesson 1: Introduction to Binti and Cultural Identity
 
@@ -180,9 +180,9 @@ Read pages 21-35 and add 3 more entries to your Character Analysis Chart focusin
     headings: ['Character Name', 'Physical Description', 'Cultural Background', 'Goals', 'Conflicts'],
     metadata: {
       googleDocUrl:
-        'https://docs.google.com/document/d/1R0UVv21vG9wH14r2raXIiQunlslqY5T2r8j04YfGLm4/edit?usp=sharing',
+        'https://docs.google.com/document/d/1d9Tb1qv9wGr3fdejLBRZYK9uerg4Sa8dMoPv48qMGQQ/edit?usp=sharing',
       googleDocEmbedUrl:
-        'https://docs.google.com/document/d/1R0UVv21vG9wH14r2raXIiQunlslqY5T2r8j04YfGLm4/preview'
+        'https://docs.google.com/document/d/1d9Tb1qv9wGr3fdejLBRZYK9uerg4Sa8dMoPv48qMGQQ/preview'
     },
     content: `# Character Analysis Chart: Binti
 
