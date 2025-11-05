@@ -289,7 +289,7 @@ export function ChatInterface() {
               rows={2}
             />
             <Button
-              onClick={handleSend}
+              onClick={() => void handleSend()}
               disabled={!input.trim() || isLoading}
               size="icon"
               className="h-[60px] w-[60px]"
@@ -312,7 +312,7 @@ export function ChatInterface() {
                     variant="outline"
                     size="sm"
                     className="text-left whitespace-normal h-auto py-2"
-                    onClick={() => handleSend(suggestion)}
+                    onClick={() => void handleSend(suggestion)}
                     disabled={isLoading}
                   >
                     {suggestion}
