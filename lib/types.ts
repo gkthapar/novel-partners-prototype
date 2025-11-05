@@ -52,6 +52,9 @@ export interface Message {
   role: 'user' | 'assistant';
   content: string;
   toolCalls?: ToolCall[];
+  statusMessages?: string[];
+  toolActivities?: ToolActivity[];
+  isStreaming?: boolean;
   timestamp: Date;
 }
 
@@ -60,6 +63,18 @@ export interface ToolCall {
   name: string;
   arguments: Record<string, any>;
   result?: any;
+  displayName?: string;
+  friendlyDescription?: string;
+  status?: 'pending' | 'completed' | 'error';
+}
+
+export interface ToolActivity {
+  id: string;
+  name: string;
+  description: string;
+  status: 'pending' | 'completed' | 'error';
+  label?: string;
+  resultSummary?: string;
 }
 
 export interface Artifact {

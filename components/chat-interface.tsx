@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, type MouseEventHandler } from 'react';
-import { Send, BookOpen, Loader2 } from 'lucide-react';
+import { Send, BookOpen, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -9,6 +9,12 @@ import { Message, Artifact } from '@/lib/types';
 import { courses, units, lessons } from '@/lib/curriculum-data';
 import ReactMarkdown from 'react-markdown';
 import { ArtifactPanel } from './artifact-panel';
+
+const humanizeToolName = (name: string) =>
+  name
+    .split('_')
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 
 export function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -35,19 +41,128 @@ export function ChatInterface() {
 
     if (!messageContent || isLoading) return;
 
+    const now = Date.now();
     const userMessage: Message = {
-      id: `msg-${Date.now()}`,
+      id: `msg-${now}`,
       role: 'user',
       content: messageContent,
       timestamp: new Date()
     };
 
     const updatedMessages = [...messages, userMessage];
+    const assistantMessageId = `msg-${now}-assistant`;
+    const assistantMessage: Message = {
+      id: assistantMessageId,
+      role: 'assistant',
+      content: '',
+      statusMessages: [],
+      toolActivities: [],
+      toolCalls: [],
+      isStreaming: true,
+      timestamp: new Date()
+    };
 
-    setMessages(updatedMessages);
+    setMessages([...updatedMessages, assistantMessage]);
     setInput('');
     setIsLoading(true);
     setSuggestedFollowUps([]);
+
+    const currentArtifact = artifactList.find(a => a.id === activeArtifactId) ?? null;
+
+    const mergeArtifactUpdates = (incoming: Artifact[], activeId?: string | null) => {
+      if (!Array.isArray(incoming) || incoming.length === 0) return;
+
+      setArtifactList(prev => {
+        const existingMap = new Map(prev.map(artifact => [artifact.id, artifact] as const));
+        for (const artifact of incoming) {
+          if (!artifact?.id) continue;
+          const previous = existingMap.get(artifact.id);
+          const merged = previous ? { ...previous, ...artifact } : artifact;
+          existingMap.set(artifact.id, merged);
+        }
+        return Array.from(existingMap.values());
+      });
+
+      const nextActive = activeId ?? incoming[incoming.length - 1]?.id;
+      if (nextActive) {
+        setActiveArtifactId(nextActive);
+      }
+    };
+
+    const updateAssistantMessage = (updater: (message: Message) => Message) => {
+      setMessages(prev =>
+        prev.map(message => (message.id === assistantMessageId ? updater(message) : message))
+      );
+    };
+
+    const appendStatusMessage = (status: string) => {
+      if (!status) return;
+      updateAssistantMessage(message => {
+        const existing = message.statusMessages ?? [];
+        if (existing[existing.length - 1] === status) {
+          return { ...message, isStreaming: true };
+        }
+        return {
+          ...message,
+          isStreaming: true,
+          statusMessages: [...existing, status]
+        };
+      });
+    };
+
+    const appendToken = (text: string) => {
+      if (!text) return;
+      updateAssistantMessage(message => ({
+        ...message,
+        isStreaming: true,
+        content: (message.content ?? '') + text
+      }));
+    };
+
+    const startToolActivity = (event: any) => {
+      const description: string = event.description ?? event.label ?? event.toolCall?.name ?? '';
+      updateAssistantMessage(message => {
+        const activities = message.toolActivities ?? [];
+        const filtered = activities.filter(activity => activity.id !== event.toolCall?.id);
+        return {
+          ...message,
+          isStreaming: true,
+          toolActivities: [
+            ...filtered,
+            {
+              id: event.toolCall?.id ?? `tool-${Date.now()}`,
+              name: event.toolCall?.name ?? 'tool',
+              description: description || 'Running helper tool...',
+              label: event.label,
+              status: 'pending' as const
+            }
+          ]
+        };
+      });
+    };
+
+    const completeToolActivity = (event: any) => {
+      updateAssistantMessage(message => {
+        const activities = message.toolActivities ?? [];
+        const updatedActivities = activities.map(activity =>
+          activity.id === event.toolCall?.id
+            ? {
+                ...activity,
+                description: event.description ?? activity.description,
+                label: event.label ?? activity.label,
+                status: 'completed' as const,
+                resultSummary: event.resultSummary ?? activity.resultSummary
+              }
+            : activity
+        );
+
+        return {
+          ...message,
+          isStreaming: true,
+          toolActivities: updatedActivities
+        };
+      });
+    };
 
     try {
       const response = await fetch('/api/chat', {
@@ -58,62 +173,134 @@ export function ChatInterface() {
             role: m.role,
             content: m.content
           })),
-          currentArtifact: artifactList.find(a => a.id === activeArtifactId) ?? null
+          currentArtifact
         })
       });
 
-      const data = await response.json();
-
-      if (data.error) {
-        throw new Error(data.error);
+      if (!response.body) {
+        throw new Error('No response body received from the assistant.');
       }
 
-      const assistantMessage: Message = {
-        id: `msg-${Date.now()}-assistant`,
-        role: 'assistant',
-        content: data.response,
-        toolCalls: data.toolCalls,
-        timestamp: new Date()
-      };
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
 
-      setMessages(prev => [...prev, assistantMessage]);
-      setSuggestedFollowUps(
-        Array.isArray(data.followUpSuggestions)
-          ? data.followUpSuggestions.filter((item: unknown): item is string => typeof item === 'string')
-          : []
-      );
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
 
-      // Update artifact if one was created/updated
-      const artifactsFromResponse = (Array.isArray(data.artifactList) ? data.artifactList : []).filter(
-        (artifact: Artifact | null): artifact is Artifact => Boolean(artifact)
-      );
+        buffer += decoder.decode(value, { stream: true });
 
-      if (artifactsFromResponse.length > 0) {
-        setArtifactList(prev => {
-          const existingMap = new Map(prev.map(artifact => [artifact.id, artifact] as const));
-          for (const artifact of artifactsFromResponse) {
-            if (!artifact?.id) continue;
-            const previous = existingMap.get(artifact.id);
-            existingMap.set(artifact.id, previous ? { ...previous, ...artifact } : artifact);
+        let newlineIndex: number;
+        while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+          const line = buffer.slice(0, newlineIndex).trim();
+          buffer = buffer.slice(newlineIndex + 1);
+          if (!line) continue;
+
+          let event: any;
+          try {
+            event = JSON.parse(line);
+          } catch (parseError) {
+            console.warn('Failed to parse stream chunk', parseError, line);
+            continue;
           }
-          return Array.from(existingMap.values());
-        });
 
-        const latestArtifact = artifactsFromResponse[artifactsFromResponse.length - 1];
-        if (latestArtifact?.id) {
-          setActiveArtifactId(latestArtifact.id);
+          switch (event.type) {
+            case 'status':
+              appendStatusMessage(event.message);
+              break;
+            case 'token':
+              appendToken(event.text ?? '');
+              break;
+            case 'tool_start':
+              appendStatusMessage(event.description ?? event.label);
+              startToolActivity(event);
+              break;
+            case 'tool_result':
+              appendStatusMessage(event.description ?? event.label);
+              completeToolActivity(event);
+              break;
+            case 'artifact_update': {
+              const artifactsFromResponse = Array.isArray(event.artifacts)
+                ? event.artifacts.filter((artifact: Artifact | null): artifact is Artifact => Boolean(artifact))
+                : [];
+              mergeArtifactUpdates(artifactsFromResponse, event.activeArtifactId);
+              break;
+            }
+            case 'complete': {
+              updateAssistantMessage(message => ({
+                ...message,
+                content: event.response ?? message.content,
+                isStreaming: false,
+                toolCalls: Array.isArray(event.toolCalls) ? event.toolCalls : message.toolCalls,
+                toolActivities: (message.toolActivities ?? []).map(activity =>
+                  activity.status === 'pending'
+                    ? { ...activity, status: 'completed' as const }
+                    : activity
+                )
+              }));
+
+              if (Array.isArray(event.artifactList)) {
+                const artifactsFromResponse = event.artifactList.filter(
+                  (artifact: Artifact | null): artifact is Artifact => Boolean(artifact)
+                );
+
+                if (event.artifactList.length === 0) {
+                  setArtifactList([]);
+                  setActiveArtifactId(null);
+                } else {
+                  mergeArtifactUpdates(artifactsFromResponse, event.artifact?.id ?? null);
+                }
+              }
+
+              setSuggestedFollowUps(
+                Array.isArray(event.followUpSuggestions)
+                  ? event.followUpSuggestions.filter(
+                      (item: unknown): item is string => typeof item === 'string'
+                    )
+                  : []
+              );
+
+              setIsLoading(false);
+              break;
+            }
+            case 'error':
+              updateAssistantMessage(message => ({
+                ...message,
+                content:
+                  message.content ||
+                  `I'm sorry, I ran into an error: ${
+                    event.message ?? 'Please verify your ANTHROPIC_API_KEY is set in .env.local.'
+                  }`,
+                isStreaming: false
+              }));
+              appendStatusMessage('The assistant hit an error while working on that request.');
+              setIsLoading(false);
+              break;
+            default:
+              break;
+          }
         }
       }
 
+      if (buffer.trim().length > 0) {
+        try {
+          const event = JSON.parse(buffer.trim());
+          if (event.type === 'status') {
+            appendStatusMessage(event.message);
+          }
+        } catch (parseError) {
+          console.warn('Failed to parse trailing buffer from stream', parseError, buffer);
+        }
+      }
     } catch (error: any) {
       console.error('Error:', error);
-      const errorMessage: Message = {
-        id: `msg-${Date.now()}-error`,
-        role: 'assistant',
+      updateAssistantMessage(message => ({
+        ...message,
         content: `I'm sorry, I encountered an error: ${error.message}. Please make sure your ANTHROPIC_API_KEY is set in the .env.local file.`,
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, errorMessage]);
+        isStreaming: false
+      }));
+      appendStatusMessage('The assistant hit an error while working on that request.');
     } finally {
       setIsLoading(false);
     }
@@ -247,15 +434,68 @@ export function ChatInterface() {
                         : 'bg-muted'
                     }`}
                   >
-                    <div className="prose prose-sm max-w-none dark:prose-invert">
-                      <ReactMarkdown>{message.content}</ReactMarkdown>
-                    </div>
+                    {message.statusMessages && message.statusMessages.length > 0 && (
+                      <div className="mb-3 space-y-1 text-xs text-muted-foreground">
+                        {message.statusMessages.map((status, idx) => (
+                          <div
+                            key={`${message.id}-status-${idx}`}
+                            className="flex items-center gap-2"
+                          >
+                            {message.isStreaming && idx === message.statusMessages.length - 1 ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <span className="h-2 w-2 rounded-full bg-muted-foreground/60" />
+                            )}
+                            <span>{status}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {message.toolActivities && message.toolActivities.length > 0 && (
+                      <div className="mb-3 space-y-2 text-xs">
+                        {message.toolActivities.map(activity => (
+                          <div
+                            key={`${message.id}-${activity.id}`}
+                            className="flex items-start gap-2 rounded-md border border-border/50 bg-background/70 px-3 py-2"
+                          >
+                            {activity.status === 'completed' ? (
+                              <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-emerald-500" />
+                            ) : activity.status === 'error' ? (
+                              <AlertCircle className="h-4 w-4 flex-shrink-0 text-destructive" />
+                            ) : (
+                              <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin text-primary" />
+                            )}
+                            <div className="flex-1 space-y-1">
+                              {activity.label && (
+                                <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/80">
+                                  {activity.label}
+                                </div>
+                              )}
+                              <div className="text-foreground">{activity.description}</div>
+                              {activity.resultSummary && (
+                                <div className="text-muted-foreground">{activity.resultSummary}</div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {message.content && (
+                      <div className="prose prose-sm max-w-none dark:prose-invert">
+                        <ReactMarkdown>{message.content}</ReactMarkdown>
+                      </div>
+                    )}
 
                     {message.toolCalls && message.toolCalls.length > 0 && (
                       <div className="mt-3 pt-3 border-t border-border/50 text-xs space-y-1">
                         {message.toolCalls.map((tc, idx) => (
-                          <div key={idx} className="text-muted-foreground">
-                            🔧 Used tool: <span className="font-mono">{tc.name}</span>
+                          <div key={idx} className="space-y-0.5 text-muted-foreground">
+                            <div>🔧 {tc.displayName ?? humanizeToolName(tc.name)}</div>
+                            {tc.friendlyDescription && (
+                              <div className="text-muted-foreground/80">{tc.friendlyDescription}</div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -270,19 +510,6 @@ export function ChatInterface() {
               </div>
             </div>
           ))}
-
-          {isLoading && (
-            <div className="flex items-start gap-3 mb-6 mr-12">
-              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-semibold text-sm">
-                NP
-              </div>
-              <div className="flex-1">
-                <div className="rounded-lg p-4 bg-muted">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                </div>
-              </div>
-            </div>
-          )}
 
           <div ref={messagesEndRef} />
         </ScrollArea>
