@@ -278,7 +278,7 @@ export function ChatInterface() {
 
         {/* Messages */}
         <ScrollArea className="flex-1">
-          <div className="mx-auto flex h-full w-full max-w-[720px] flex-col px-4 py-6">
+          <div className="mx-auto flex w-full max-w-[720px] flex-col px-4 py-6">
             {messages.length === 0 && (
               <div className="flex flex-1 flex-col items-center justify-center text-center">
                 <BookOpen className="mb-4 h-16 w-16 text-muted-foreground" />
