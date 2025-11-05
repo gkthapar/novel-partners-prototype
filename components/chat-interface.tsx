@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, type MouseEventHandler } from 'react';
 import { Send, BookOpen, Loader2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
@@ -67,7 +67,7 @@ const markdownComponents: Components = {
       {children}
     </pre>
   ),
-  code: ({ node: _node, inline, className, children, ...props }) => {
+  code: ({ node: _node, inline, className, children, ...props }: any) => {
     if (inline) {
       return (
         <code
@@ -115,13 +115,15 @@ export function ChatInterface() {
     scrollToBottom();
   }, [messages]);
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+  const handleSend = async (overrideInput?: string) => {
+    const messageText = overrideInput ?? input;
+
+    if (!messageText.trim() || isLoading) return;
 
     const userMessage: Message = {
       id: `msg-${Date.now()}`,
       role: 'user',
-      content: input,
+      content: messageText,
       timestamp: new Date()
     };
 
@@ -194,10 +196,14 @@ export function ChatInterface() {
     }
   };
 
+  const handleSendClick: MouseEventHandler<HTMLButtonElement> = () => {
+    void handleSend();
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      void handleSend();
     }
   };
 
@@ -373,7 +379,7 @@ export function ChatInterface() {
               rows={2}
             />
               <Button
-                onClick={handleSend}
+                onClick={handleSendClick}
                 disabled={!input.trim() || isLoading}
                 size="icon"
                 className="h-[52px] w-[52px]"
