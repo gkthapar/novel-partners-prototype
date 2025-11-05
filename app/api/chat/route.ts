@@ -141,12 +141,58 @@ export async function POST(req: NextRequest) {
       continueLoop = hasToolUse && response.stop_reason === 'tool_use';
     }
 
+    let followUpSuggestions: string[] = [];
+
+    try {
+      const conversationForSuggestions = [
+        ...(Array.isArray(messages) ? messages : []),
+        { role: 'assistant', content: currentResponse }
+      ];
+
+      const conversationText = conversationForSuggestions
+        .map((msg: any) => {
+          const speaker = msg.role === 'assistant' ? 'Assistant' : 'Teacher';
+          const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+          return `${speaker}: ${content}`;
+        })
+        .join('\n');
+
+      const suggestionResponse = await anthropic.messages.create({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 512,
+        temperature: 0.3,
+        system:
+          'You are an expert instructional coach helping teachers extend a conversation with a curriculum assistant. Suggest pedagogically sound follow-up questions that keep the coaching dialogue moving forward.',
+        messages: [
+          {
+            role: 'user',
+            content: `Conversation so far:\n${conversationText}\n\nProvide 3 or 4 concise follow-up questions the teacher could ask next. Respond ONLY with a valid JSON array of strings.`
+          }
+        ]
+      });
+
+      const suggestionText = (suggestionResponse.content ?? [])
+        .filter((item: any) => item.type === 'text')
+        .map((item: any) => item.text)
+        .join('');
+
+      const parsedSuggestions = JSON.parse(suggestionText);
+      if (Array.isArray(parsedSuggestions)) {
+        followUpSuggestions = parsedSuggestions
+          .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+          .slice(0, 4);
+      }
+    } catch (suggestionError) {
+      console.error('Follow-up suggestion generation error:', suggestionError);
+    }
+
     return NextResponse.json({
       response: currentResponse,
       toolCalls,
       artifact: artifacts.length > 0 ? artifacts[artifacts.length - 1] : null,
       artifacts: artifacts.length > 0 ? artifacts[artifacts.length - 1] : null,
       artifactList: artifacts,
+      followUpSuggestions,
       usage: {
         input_tokens: 0,
         output_tokens: 0
