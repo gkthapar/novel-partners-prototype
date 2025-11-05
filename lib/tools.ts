@@ -172,6 +172,57 @@ export const tools = [
         courseId: {
           type: 'string',
           description: 'Course ID'
+        },
+        courseName: {
+          type: 'string',
+          description: 'Human-readable course name for display'
+        },
+        unitTitle: {
+          type: 'string',
+          description: 'Unit title for context chips'
+        },
+        readings: {
+          type: 'array',
+          description: 'Reference texts or readings students should use',
+          items: { type: 'string' }
+        },
+        aiFeedbackLength: {
+          type: 'string',
+          description: 'Length of AI-generated feedback (e.g., "One paragraph")'
+        },
+        aiFeedbackStyle: {
+          type: 'string',
+          description: 'Feedback tone/style (e.g., "Glows and grows")'
+        },
+        gradingNotes: {
+          type: 'string',
+          description: 'Specific grading or feedback instructions for the AI'
+        },
+        revisionOpportunities: {
+          type: 'number',
+          description: 'Number of revision opportunities students receive'
+        },
+        deliveryMode: {
+          type: 'string',
+          description: 'How feedback is delivered (e.g., "I\'ll grade this assignment later with AI assistance")'
+        },
+        sharingPreference: {
+          type: 'string',
+          description: 'Who has visibility to the assignment (e.g., "My classroom use only")'
+        },
+        assignToClasses: {
+          type: 'array',
+          description: 'Classes or sections the assignment should be published to',
+          items: { type: 'string' }
+        },
+        disablePasting: {
+          type: 'boolean',
+          description: 'Whether to prevent students from pasting text into the response field'
+        },
+        aiTrainingExamples: {
+          type: 'array',
+          description: 'Optional exemplar responses to train the AI grader',
+          items: { type: 'string' }
         }
       },
       required: ['title', 'gradeLevel', 'prompt', 'rubric']
@@ -459,6 +510,91 @@ function createEnlightenAssignment(args: any) {
   // Mock EnlightenAI API call
   const assignmentId = `assign-${Date.now()}`;
 
+  const readings = Array.isArray(args.readings) ? args.readings : args.readings ? [args.readings] : [];
+  const aiTrainingExamples = Array.isArray(args.aiTrainingExamples)
+    ? args.aiTrainingExamples
+    : args.aiTrainingExamples
+    ? [args.aiTrainingExamples]
+    : [];
+
+  const metadata = {
+    course: args.courseName,
+    unit: args.unitTitle,
+    gradeLevel: args.gradeLevel
+  };
+
+  const buildFieldRow = (label: string, value?: string | number | boolean | string[]) => {
+    if (value === undefined || value === null || value === '') {
+      return `- **${label}:** _Teacher can adjust during publish_`;
+    }
+    if (Array.isArray(value)) {
+      if (value.length === 0) {
+        return `- **${label}:** _Teacher can adjust during publish_`;
+      }
+      return `- **${label}:**\n${value.map(item => `  - ${item}`).join('\n')}`;
+    }
+    const stringValue = String(value);
+    if (stringValue.includes('\n')) {
+      const indented = stringValue.split('\n').map(line => `  ${line}`).join('\n');
+      return `- **${label}:**\n${indented}`;
+    }
+    return `- **${label}:** ${stringValue}`;
+  };
+
+  const assignmentDetails = [
+    buildFieldRow('Assignment title', args.title),
+    buildFieldRow('Expected submission length', args.expectedLength ?? '2-3 paragraphs'),
+    buildFieldRow('Grade level', args.gradeLevel),
+    buildFieldRow('Rubric', args.rubric),
+    buildFieldRow('Task description and prompt', args.prompt),
+    buildFieldRow(
+      'Readings or reference text',
+      readings.length ? readings.map((reading: string) => `“${reading}”`) : ['Core Binti mentor text excerpts']
+    )
+  ].join('\n');
+
+  const aiTraining = [
+    buildFieldRow('Expected feedback length', args.aiFeedbackLength ?? 'One paragraph'),
+    buildFieldRow('Style of feedback', args.aiFeedbackStyle ?? 'Glows and grows'),
+    buildFieldRow('Specific grading and feedback instructions', args.gradingNotes ?? 'Reference Novel Partners rubric language.'),
+    buildFieldRow(
+      'Train your AI with examples',
+      aiTrainingExamples.length
+        ? aiTrainingExamples.map((example: string, idx: number) => `Example ${idx + 1}: ${example}`)
+        : ['Example 1: _Teacher can paste an exemplar later_']
+    )
+  ].join('\n');
+
+  const publishSettings = [
+    buildFieldRow('Who can access this assignment?', args.sharingPreference ?? 'My classroom use only'),
+    buildFieldRow('How would you like to deliver feedback?', args.deliveryMode ?? "I'll grade this assignment later with AI assistance"),
+    buildFieldRow('How many revision opportunities?', args.revisionOpportunities ?? 1),
+    buildFieldRow(
+      'Assign to classes',
+      Array.isArray(args.assignToClasses) && args.assignToClasses.length
+        ? args.assignToClasses
+        : ['Grade 9 English I - Period 1']
+    ),
+    buildFieldRow('Disable pasting for students', args.disablePasting ? 'Enabled' : 'Disabled')
+  ].join('\n');
+
+  const content = `# EnlightenAI Assignment Builder
+
+Use the fields below to mirror the Enlighten.ai publish flow. Everything is pre-filled with Novel Partners curriculum context so the teacher can verify and publish in a few clicks.
+
+## Step 1 · Assignment details
+${assignmentDetails}
+
+## Step 2 · AI training (optional)
+${aiTraining}
+
+## Step 3 · Publish assignment
+${publishSettings}
+
+---
+- Assignment URL (demo): https://enlighten-ai.com/assignments/${assignmentId}
+- Next action: Open Enlighten.ai, confirm the pre-filled values, then click **Publish assignment**.`;
+
   return {
     assignmentId,
     status: 'created',
@@ -470,6 +606,13 @@ function createEnlightenAssignment(args: any) {
     expectedLength: args.expectedLength,
     url: `https://enlighten-ai.com/assignments/${assignmentId}`,
     message: 'Assignment created in EnlightenAI (demo mode)',
-    note: 'This is a mock assignment. In production, this would post to the real EnlightenAI API.'
+    note: 'This is a mock assignment. In production, this would post to the real EnlightenAI API.',
+    artifact: {
+      id: `enlighten-${assignmentId}`,
+      type: 'assessment',
+      title: `${args.title} · EnlightenAI Flow`,
+      content,
+      metadata
+    }
   };
 }
